@@ -1,0 +1,71 @@
+---
+title: "Project 4"
+author: "Corey Kuhn"
+date: "March 28, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+1)a) The estimated logistic regression model is $logit(\hat{\pi}) = -1.41734+0.06868d-1.65895t$, where $d$ is duration and $t$ is device type.
+```{r}
+dat <- read.csv("http://math.luc.edu/~ebalderama/cda_resources/projects/SoreThroat.csv")
+m <- glm(Y ~ D+T, family=binomial, data=dat)
+```
+
+b) The maximum value of the log likelihood function is -15.06897.
+```{r}
+logLik(m)
+```
+
+c) This plot shows the predicted probabilities of getting a sore throat using the logistic regression model. Since there are two levels of device type, coded 0 for laryngeal mask and 1 for tracheal tube, the two S curves are the same shape, but the blue curve representing tracheal tube is just shifted to the right. This means that for a given duration time, the probability of getting a sore throat for someone with the tracheal tube has a lower probability of getting a sore throat than someone who had the laryngeal mask.
+```{r}
+logit <- make.link("logit")
+ab <- coef(m)
+pred <- predict(m, type="response")
+plot(dat$D, pred, xlim=c(-60,160),ylim=c(0,1),xlab="Duration",ylab=("Sore Throat"),main="S Curve")
+curve(logit$linkinv(ab[1]+ab[2]*x+0*ab[3]),col="red",add=TRUE)#When T=0
+curve(logit$linkinv(ab[1]+ab[2]*x+1*ab[3]),col="blue",add=TRUE)#When T=1
+legend("bottomright", c("laryngeal mask", "tracheal tube"),col=c("red", "blue"), lty=1, cex=0.8)
+```
+
+d) When performing a LRT to test the null hypothesis $H_0: \beta_d=0$, we obtain a p-value of 0.0004203, so we reject our null hypothesis and conclude that there is a relationship between the probability of getting a sore throat and duration. We can clearly see this in the S Curve plot because as duration increases, the probability of getting a sore throat also increases. When testing $H_0: \beta_t=0$, we obtain a p-value of 0.0608744. At a significance level of 0.05, we would retain our null hypothesis that there is no relationship between device type and probability of getting a sore throat. In the plot, however, we do see a relationship between the two, since at any given duration, the probability of getting a sore throat is greater for those with the laryngeal mask. So even although the LRT suggests to leave device type out of the model, it may be approprite to keep it.
+```{r}
+drop1(m,test="Chisq")
+```
+
+e) Controlling for device type, the estimated odds of a sore throat are between 2.14748 and 52.72097 times as large for every additional minute of duration. Controlling for duration, the odds of a sore throat are between 0.02608803 and 1.07717361 times as large when the device type is tracheal tube.
+```{r}
+d_int <- exp(30*confint(m)[2,])
+t_int <- exp(confint(m)[3,])
+```
+
+f) If I had a choice, I would choose the tracheal tube to best avoid a sore throat, since for any given duration, the predicted probability of getting a sore throat is less when a tracheal tube is used. Also, the confidence interval for the odds of a sore throat when the device type is tracheal tube is mostly less than 1, indicating a sore throat is less likely when this device is used.
+
+2)a) Model #1: $logit(\hat{\pi})=-1.41734+0.06868d-1.65895t$
+
+Model #2: $logit(\hat{\pi})=0.04979+0.02848d-4.47224t+0.07460dt$
+
+Model #3: $logit(\hat{\pi})=-1.548-0.07539d-0.00007499d^2-1.642t$
+```{r}
+m1 <- glm(Y ~ D+T, family=binomial, data=dat)
+summary(m1)
+m2 <- glm(Y ~ D+T+I(D*T), family=binomial, data=dat)
+summary(m2)
+m3 <- glm(Y ~ D+I(D^2)+T, family=binomial, data=dat)
+summary(m3)
+```
+
+b) Model #2 may be appropriate in a situation where the effect that duration has on the logit of the probability of getting a sore throat depends on the type of device used. Performing the LRT, we obtain a p-value of 0.1777 and conclude that the interaction term is not significant in the model.
+```{r}
+anova(m1,m2,test="Chisq")
+```
+
+c) Model #3 may be appropriate in a situation where duration has a non-linear relationship to the logit of the probability of getting a sore throat. Performing the LRT, we obtain a p-value of 0.9462 and conclude that the quadratic term is not significant in the model.
+```{r}
+anova(m1,m3,test="Chisq")
+```
+

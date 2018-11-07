@@ -1,0 +1,127 @@
+---
+title: "Project 2"
+author: "Corey Kuhn"
+date: "February 16, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. We fit a logistic regression model to the data, predicting the log of the odds ratio. To get the predicted odds ratio, we then take the exponential of the estimated coefficient for treatment. Performing this calculation, we get a value of 0.6873279, the same value we got in Project 1.
+```{r}
+library(reshape2)
+row <- c("1","2","3","4")
+trt <- c("Vaccine", "Vaccine", "Placebo", "Placebo")
+res <- c("HIV","NoHIV","HIV","NoHIV")
+frq <- c(51,8146,74,8124)
+hiv_data <- data.frame(trt,res,frq)
+names(hiv_data) <- c("Treatment","Response","Frequency")
+hiv_datawide <- dcast(hiv_data, Treatment ~ Response, value.var="Frequency")
+m <- glm(cbind(HIV,NoHIV) ~ Treatment, family = binomial, data = hiv_datawide)
+summary(m)
+or <- exp(m$coefficients[2])
+or
+```
+
+2.a.i. The 95% score confidence interval for the difference of two probabilities is (-0.0055459999, -0.0001439411). 
+    ii. The 95% score interval for the relative risk is (0.4839869, 0.9815506).
+    iii. the 95% score interval for the odds ratio is (0.4808869, 0.9823923).
+```{r}
+library(PropCIs)
+diff_ci <- diffscoreci(hiv_datawide$HIV[2],sum(c(hiv_datawide$HIV[2],hiv_datawide$NoHIV[2])),hiv_datawide$HIV[1],sum(c(hiv_datawide$HIV[1],hiv_datawide$NoHIV[1])),conf.level=.95)
+diff_ci$conf.int
+relrisk_ci <- riskscoreci(hiv_datawide$HIV[2],sum(c(hiv_datawide$HIV[2],hiv_datawide$NoHIV[2])),hiv_datawide$HIV[1],sum(c(hiv_datawide$HIV[1],hiv_datawide$NoHIV[1])),conf.level=.95)
+relrisk_ci$conf.int
+or_ci <- orscoreci(hiv_datawide$HIV[2],sum(c(hiv_datawide$HIV[2],hiv_datawide$NoHIV[2])),hiv_datawide$HIV[1],sum(c(hiv_datawide$HIV[1],hiv_datawide$NoHIV[1])),conf.level=.95)
+or_ci$conf.int
+```
+
+2.b. The 95% Wald confidence interval for the difference of two probabilities obtained in Project 1 is (-0.005467406, -0.0001422003). The endpoints of this interval and the score interval for the difference of two probabilities are very close. Since 0 is not contained in either, they both agree that there is a difference in the probability of contracting HIV for the placebo and the vaccine groups, and they both suggest that the probability is less for those with the vaccine than for those without the vaccine. The 95% Wald confidence interval for the relative risk obtained in Project 1 is (0.4831119, 0.9834112). This interval is also very close to the 95% score interval for the relative risk. Since the values in both these intervals are less than 1, we conclude that those with the vaccine are less likely to have HIV than those without the vaccine. Lastly, the 95% Wald confidence interval for the odds ratio from Project 1 is (0.4804794, 0.9832256), which is once again, very similar to the score interval. Since both are less than 1, they suggest that the odds of contracting HIV for those with the vaccine is lower than for those without the vaccine.
+
+```{r}
+coverage <- function(n1, n2, p1, p2, method = c("wald", "score"),
+conf.level = 0.95, sims=2000){
+require(PropCIs)
+method <- match.arg(method)
+x1 <- rbinom(sims, n1, p1)
+x2 <- rbinom(sims, n2, p2)
+cover <- rep(FALSE, sims)
+for(i in 1:sims){
+ci <- switch(method,
+wald = wald2ci(x1[i], n1, x2[i], n2, conf.level = conf.level,
+adjust = "Wald")$conf.int,
+score = diffscoreci(x1[i], n1, x2[i], n2,
+conf.level = conf.level)$conf.int)
+cover[i] <- (ci[1] <= p1-p2) & (p1-p2 <= ci[2])
+}
+return(mean(cover))
+}
+```
+
+3.a. The 95% Wald interval for the difference in two proportions is (-0.1274203, 0.2868406) and the 95% score interval is (-0.1290779, 0.2710555).
+```{r}
+n1 <- 21+2
+n2 <- 15+3
+p1 <- 21/n1 # Surgery group
+p2 <- 15/n2 # Radiation group
+pd <- p1-p2
+se <- sqrt((p1*(1-p1)/n1)+(p2*(1-p2)/n2))
+wald <- cbind(pd-1.96*se, pd+1.96*se)
+wald
+```
+
+```{r}
+library(reshape2)
+trt <- c("Surgery", "Surgery", "Radiation", "Radiation")
+res <- c("Controlled","Not","Controlled","Not")
+frq <- c(21,2,15,3)
+cancer_data <- data.frame(trt,res,frq)
+names(cancer_data) <- c("Treatment","Response","Frequency")
+cancer_datawide <- dcast(cancer_data, Treatment ~ Response, value.var="Frequency")
+library(PropCIs)
+diff_ci <- diffscoreci(cancer_datawide$Controlled[1],sum(c(cancer_datawide$Controlled[1],hiv_datawide$Not[1])),cancer_datawide$Controlled[2],sum(c(cancer_datawide$Controlled[2],cancer_datawide$Not[2])),conf.level=.95)
+diff_ci$conf.int
+```
+
+3.b. The estimated true confidence level for the Wald confidence interval is 0.9285 and for the score confidence interval is 0.955.
+```{r}
+coverage(n1,n2,p1,p2)
+coverage(n1,n2,p1,p2, method="score")
+```
+
+3.c. It looks like across all values of $\pi_1$, the coverage probability for the score confidence interval has low variability compared to the coverage probability for the Wald confidence interval. The probabilites for the Wald interval seem to approach .95 as $\pi_1$ increases. For both the Wald and the score, however, the coverage probabilites seem to remain under .95 for most of the values of $\pi_1$.
+```{r}
+# Adjusts coverage function to hold all constant except for p1
+coverage <- function(p1, method = c("wald", "score"),
+conf.level = 0.95, sims=2000){
+require(PropCIs)
+method <- match.arg(method)
+x1 <- rbinom(sims, sum(21,2), p1)
+x2 <- rbinom(sims, sum(15,3), 15/sum(15,3))
+cover <- rep(FALSE, sims)
+for(i in 1:sims){
+ci <- switch(method,
+wald = wald2ci(x1[i], sum(21,2), x2[i], sum(15,3), conf.level = conf.level,
+adjust = "Wald")$conf.int,
+score = diffscoreci(x1[i], sum(21,2), x2[i], sum(15,3),
+conf.level = conf.level)$conf.int)
+cover[i] <- (ci[1] <= p1-15/sum(15,3)) & (p1-15/sum(15,3) <= ci[2])
+}
+return(mean(cover))
+}
+```
+```{r}
+p1 <- seq(from=0.05, to=0.95,by=0.05)
+cov_wald <- lapply(p1, function(x) coverage(x))
+cov_score <- lapply(p1, function(x) coverage(x, method="score"))
+plot(p1,cov_wald, col="red",ylim=c(.89,1),ylab="Coverage",xlab="Pi_1",main="Coverage probabilities")
+lines(p1,cov_wald, col="red")
+points(p1,cov_score,col="green")
+lines(p1,cov_score,col="green")
+```
+
+
+
+

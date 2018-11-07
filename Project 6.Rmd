@@ -1,0 +1,98 @@
+---
+title: "Project 6"
+author: "Corey Kuhn"
+date: "May 4, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+10.6
+
+a) $\hat{\beta_1}$: For a given subject, the estimated probability of smoking cigarettes is $e^{4.2227}$ times the estimated probability of not smoking cigarettes. $\hat{\beta_2}$: For a given subject, the estimated probability of drinking alcohol is $e^{1.6209}$ times the estimated probability of not drinking alcohol. $\hat{\beta_3}$: For a given subject, the estimated probability of smoking marijuana is $e^{1.6209}$ times the estimated probability of not smoking marijuana. $\hat{\beta_1}-\hat{\beta_3}$: For a given subject, the estimated odds of smoking cigarettes are $e^{4.9978}$ times the estimated odds of smoking marijuana.
+
+b) According to the model, 95% of all subjects will have $u_i$ between $0-1.96(3.5496)$ and $0+1.96(3.5496)$. Since $\hat{\sigma}$ is large, the interval will be large, implying that the effect of $u_i$ on odds is estimated to be large for most subjects.
+
+c) A large positive value for $u_i$ for a particular student represents a large estimated odds of using a particular substance $t$.
+
+10.7
+
+a) {$\hat{\beta_t}$} is much larger than the estimates for the marginal model because the value of $\hat{\sigma}$ is large and because there is strong associations between responses.
+
+b) The focus for the model in the previous exercise is to odds of using one substance compared with the odds of using another substance, whereas the focus of the loglinear model is the strength of the association between using two substances given the use of the third substance.
+
+c) This is because the conditional independence between responses given the random effects implies conditional independence in the marginal case.
+
+9.2
+
+$\hat{\beta_1}$ = 2.10979620: Estimated odds for alcohol are $e^{2.10979620}$ times the estimated odds for marijuana. $\hat{\beta_2}$ = 0.96557861: estiamted odds for cigarettes are $e^{0.96557861}$. $\hat{\beta_3}$ = 0.38336411: Estimated odds for white subjects are $e^{0.38336411}$ times the estimated odds for non-whites. $\hat{\beta_4}$ = 0.07686164: Estimated odds for male subjects are $e^{0.07686164}$ times the estimated odds for females.
+
+```{r}
+library(reshape2)
+library(gee)
+#White Male Marijuana Alcohol Cigarette Frequency
+df <- as.data.frame(rbind(c(1,0,1,1,1,405),
+c(1,0,0,1,1,268),
+c(1,0,1,1,0,13),
+c(1,0,0,1,0,218),
+c(1,0,1,0,1,1),
+c(1,0,0,0,1,17),
+c(1,0,1,0,0,1),
+c(1,0,0,0,0,117),
+c(1,1,1,1,1,453),
+c(1,1,0,1,1,228),
+c(1,1,1,1,0,28),
+c(1,1,0,1,0,201),
+c(1,1,1,0,1,1),
+c(1,1,0,0,1,17),
+c(1,1,1,0,0,1),
+c(1,1,0,0,0,133),
+c(0,0,1,1,1,23),
+c(0,0,0,1,1,23),
+c(0,0,1,1,0,2),
+c(0,0,0,1,0,19),
+c(0,0,1,0,1,0),
+c(0,0,0,0,1,1),
+c(0,0,1,0,0,0),
+c(0,0,0,0,0,12),
+c(0,1,1,1,1,30),
+c(0,1,0,1,1,19),
+c(0,1,1,1,0,1),
+c(0,1,0,1,0,18),
+c(0,1,1,1,0,1),
+c(0,1,0,0,1,8),
+c(0,1,1,0,0,0),
+c(0,1,0,0,0,17)))
+names(df) <- c("White","Male", "Marijuana","Alcohol", "Cigarette", "Frequency")
+Frequency <- df$Frequency
+df$Frequency <- NULL
+df <- df[rep(1:32,Frequency),]
+rm(Frequency)
+rownames(df) <- NULL
+dim(df)
+df$Subject <- factor(1:2276)
+crossm <- melt(df,id=c("White","Male","Subject"))
+crossm <- crossm[order(crossm$Subject),]
+names(crossm)[4:5] <- c("Drug","Resp")
+gee1 <- gee(Resp~Drug+White+Male, id=Subject,data=crossm,family=binomial,corstr="exchangeable")
+gee1 <- gee(Resp~Drug+White+Male, id=Subject,data=crossm,family=binomial,corstr="exchangeable")
+summary(gee1)
+```
+
+10.8
+
+a) See code below for glmm model.
+
+```{r}
+library(lme4)
+glmm1 <- glmer(Resp~Drug+White+Male+(1|Subject),family=binomial, data=crossm)
+summary(glmm1)
+```
+
+b) We can see that the $\beta$ estimates in the glmm model are larger than the estimates in the marginal model. This is because $\hat{\sigma}=3.029$, which is fairly large, suggesting that there is strong association between the responses. According to this model, 95% of all individuals will have $u_i$ between $-1.96(3.029)$ and $1.96(3.029)$. Since $\hat{\sigma}$ is large, the interval will be large, implying that the effect of $u_i$ on odds is estimated to be large for most subjects. The $\beta$ estimates in this model are fixed effects, which means they are the same for each individual. The $u_i$ are random effects, which will be different for each individual.
+
+
+
+

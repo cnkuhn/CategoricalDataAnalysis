@@ -1,0 +1,108 @@
+---
+title: "Project 1"
+author: "Corey Kuhn"
+date: "February 3, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+1.a. In January every year, many people make a New Year's resolution related to fitness. Gym "regulars" tend to joke about how they notice workout facilities are  very crowded in the first couple months of the year, but they become less crowded as the year progresses and people drop their New Year's resolution. Over a 30-minute time interval, I asked 74 people walking into the gym if they were a "regular" who goes to the gym year-round or if they were at the gym because of a 2017 New Year's resolution.
+
+1.b. This experiement satisfies the assumptions of a binomial distribution because there are 74 trials that are independent of one another (we assume that whether each person is a regular or has a resolution does not affect any of the other individuals), and each trial has a certain probability of success (having a New Year's resolution) or failure (being a regular).
+
+1.c. $\hat{\pi}$ = 0.3783784
+```{r}
+pi_hat <- 28/74
+pi_hat
+
+```
+
+1.d. Because the MLE $p=\hat{\pi}=\frac{y}{n}$, the MLE for this experiment is 0.3783784, as we obtained in 1.c.
+```{r}
+curve(dbinom(28,74,x), xlim = c(0,1))
+```
+
+1.e. The 95% Wald confidence interval for $\pi$ is (0.2678773, 0.4888794).
+```{r}
+p <- pi_hat
+n <- 74
+se <- sqrt(p*(1-p)/n)
+conf <- cbind(p-1.96*se, p+1.96*se)
+conf
+```
+
+1.f. The 95% Agresti-Coull confidence interval for $\pi$ is (0.2766473, 0.4925835).
+```{r}
+p2 <- (28+2)/(74+4)
+n2 <- (74+4)
+se2 <- sqrt(p2*(1-p2)/n2)
+conf2 <- cbind(p2-1.96*se2, p2+1.96*se2)
+conf2
+```
+
+1.g. The 95% score confidence interval for $\pi$ is (0.2764753, 0.4922854).
+```{r}
+prop.test(28,74,correct=FALSE)
+```
+
+1.h. The three confidence intervals are not the exact same, but they are very close together. The Wald confidence interval is farther away from 0.5 than the other two. None of them include 0.5, so in all cases, we reject the null hypothesis $H_0: \pi = 0.5$ and conclude that the probability that a person going to the gym has a New Year's resolution regarding fitness is different than 0.5.
+
+1.i. We are 95% confident that the proportion of individuals at the gym with a New Year's resolution relating to fitness (rather than being at the gym because they go regularly without a New Year's resolution), $\pi$, is in the interval (0.2764753, 0.4922854).
+
+2.a. We will define a success as having HIV. Looking at the table, $p_1=0.006221788$ is the probability of having HIV for those with the vaccine and $p_2=0.009026592$ is the probability of having HIV for those with the placebo.
+```{r}
+n1 <- 8197
+n2 <- 8198
+p1 <- 51/n1
+p2 <- 74/n2
+p1
+p2
+```
+
+i. We are 95% confident that the difference between the probability of having HIV when taking the placebo and the probability of having HIV when having the vaccine falls in the interval (-0.005467406, -0.0001422003). Because 0 does not fall in the interval, there is sufficient evidence to conclude that there is a difference in the probability of having HIV when with the vaccine vs. with the placebo. Considering the confidence interval we obtained, we have reason the believe that $\pi_1-\pi_2 < 0$, or that the probability of having HIV is less with the vaccine rather than with the placebo. 
+```{r}
+pd <- p1-p2
+pd
+se <- sqrt((p1*(1-p1)/n1)+(p2*(1-p2)/n2))
+ci <- cbind(pd-1.96*se, pd+1.96*se)
+ci
+```
+
+ii. We are 95% confident that the relative risk ratio of having HIV with the vaccine to having HIV without the vaccine falls in the interval (0.4831119, 0.9834112). Those who have the vaccine are between 0.4831119 and 0.9834112 times as likely to have HIV compared to those who take the placebo. This suggests a reduced risk of getting HIV for those with the vaccine. 
+```{r}
+rr <- p1/p2
+se <- sqrt((1-p1)/(n1*p1)+(1-p2)/(n2*p2))
+z <- 1.96
+log.ci <- c(log(rr)-z*se, log(rr)+z*se)
+ci <- exp(log.ci)
+ci
+```
+
+iii. We are 95% confident that the odds ratio falls in the interval (0.4804794, 0.9832256). Because the interval is less than 1, we see that those with the vaccine have a lower odds of having HIV than those without the vaccine.
+```{r}
+or <- ((p1/(1-p1))/(p2/(1-p2)))
+log.or <- log(or)
+se <- sqrt((1/51)+(1/8146)+(1/74)+(1/8124))
+log.ci <- c(log.or-z*se, log.or+z*se)
+ci <- exp(log.ci)
+ci
+```
+
+iv. Because we obtained a p-value of 0.04831 which is less than a significance level of 0.05, we conclude that treatment and response are not independent and there is an association between the two. 
+```{r}
+Frequency <- c(51, 8146, 74, 8124)
+Response <- c("HIV", "No HIV", "HIV", "No HIV")
+Treatment <- c("Vaccine", "Vaccine", "Placebo", "Placebo")
+table <- xtabs(Frequency ~ Treatment + Response)
+test <- chisq.test(table)
+test
+```
+
+2.b. In a study examining the effectiveness of a new HIV vaccine, results indicate that getting the vaccine lowers the chance of developing HIV. In the sample of individuals in the study, the proportion of HIV individuals with the vaccine is lower than the proportion of HIV individuals without the vaccine. The study tested if the difference in proportions is great enough to imply some sort of association between having the HIV vaccine and actually getting HIV. An association between the two events suggests that knowing whether or not a person has the HIV vaccine affects the probability they will contract HIV. The results of this test showed that there is an association. Further testing of the difference in the proportion of HIV individuals with the vaccine and without the vaccine resulted in a confidence interval of (-0.005467406, -0.0001422003), which is an estimated range of the difference. This means that the probability of someone with the vaccine contracting HIV is anywhere between 0.0001422003 and 0.005467406 lower than the probability of someone without the vaccine contracting HIV. In another test performed in the study, results indicate that those who have the vaccine are between 0.4831119 and 0.9834112 times as likely to have HIV compared to those who take the placebo. This suggests a reduced risk of getting HIV for those with the vaccine. 
+
+
+
+
+

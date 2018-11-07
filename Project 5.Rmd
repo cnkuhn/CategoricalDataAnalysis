@@ -1,0 +1,145 @@
+---
+title: "Project 5"
+author: "Corey Kuhn"
+date: "April 20, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+dat <- read.csv("http://math.luc.edu/~ebalderama/cda_resources/data/cereal_dillons.csv")
+# dividing each explanatory variable by serving size for consistency
+for(i in 5:7){
+  dat[,i] <- dat[,i]/dat[,4]
+}
+# re-scale each variable to be between 0 and 1 (normalize)
+for(i in 5:7){
+  dat[,i] = (dat[,i]-min(dat[,i]))/(max(dat[,i])-min(dat[,i]))
+}
+```
+
+1)a)
+```{r}
+boxplot(sugar_g ~ Shelf, data = dat, ylab = "Sugar", xlab = "Shelf", main="Sugar")
+stripchart(sugar_g ~ Shelf, data = dat, method = "jitter", vertical = TRUE,
+           pch = 1, col = 2, add = TRUE)
+boxplot(fat_g ~ Shelf, data = dat, ylab = "Fat", xlab = "Shelf", main="Fat")
+stripchart(fat_g ~ Shelf, data = dat, method = "jitter", vertical = TRUE,
+           pch = 1, col = 2, add = TRUE)
+boxplot(sodium_mg ~ Shelf, data = dat, ylab = "Fat", xlab = "Shelf", main="Sodium")
+stripchart(sodium_mg ~ Shelf, data = dat, method = "jitter", vertical = TRUE,
+           pch = 1, col = 2, add = TRUE)
+```
+
+b) There does not seem to be a clear relationship between shelf 1 and sugar, fat, or sodium, but the plot may suggest that shelf 1 contains cereals with lower fat and higher sodium. Shelf 2 looks like it contains cereals with higher sugar, but the relationship with fat and sodium is unclear. Shelf 3 does not have a clear relationship with any of the predictors. It seems to contain cereals with all levels of sugar, fat, and sodium. Shelf 4 may contain cereals that do not have high contents of sugar, fat, or sodium.
+```{r}
+library(MASS)
+parcoord(dat[,c(2,5:7)],main="Parallel Coordinates Plot", col = 1 + (0:39)%/%10)
+```
+
+c) Ordinality should be taken into account if there is a logical ordering to the response variable. In this case, there is a logical ordering. The response variable shelf number tells us how high off the floor each cereal is, and there is a clear order regarding height and shelf numbers. Thus, ordinality does occur in this situation.
+
+d) See output for the coefficient estimates of the model.
+```{r}
+library(reshape2)
+dat <- transform(dat,
+                 Shelf = factor(Shelf, labels = c("Shelf1","Shelf2","Shelf3","Shelf4")),
+                 Freq = 1)
+dat <- dcast(dat, ID + sugar_g + fat_g + sodium_mg ~ Shelf, fill = 0)
+library(VGAM)
+m <- vgam(cbind(Shelf1,Shelf2,Shelf3,Shelf4)~sugar_g+fat_g+sodium_mg,
+          family=multinomial, data=dat)
+coef(m)
+```
+
+e) When performing a likelihood ratio test between the model with all 3 predictors and the model without sugar, we obtain a p-value of 4.521e-05. This suggests that the two models are significantly different. Thus, sugar is a significant variable. Carrying out the same test between the model with all 3 predictors and the model without fat, we obtain a p-value of 0.1522 which suggests that the two models are not significantly different. In other words, fat is not a significant predictor. Then, we compare the model with all 3 predictors to the model without sodium, and we get a p-value of 7.073e-06. This indicates that sodium is significant in the model. Lastly, we perform the test between the model with the 3 predictors and the model with all interactions. The p-value here is 0.1831, indicating that there are no significant interactions.
+```{r}
+m_sugar <- vgam(cbind(Shelf1,Shelf2,Shelf3,Shelf4)~fat_g+sodium_mg,
+                family=multinomial, data=dat)
+m_fat <- vgam(cbind(Shelf1,Shelf2,Shelf3,Shelf4)~sugar_g+sodium_mg,
+              family=multinomial, data=dat)
+m_sodium <- vgam(cbind(Shelf1,Shelf2,Shelf3,Shelf4)~sugar_g+fat_g,
+                 family=multinomial, data=dat)
+m_interactions <- vgam(cbind(Shelf1,Shelf2,Shelf3,Shelf4)~sugar_g*fat_g*sodium_mg,
+           family=multinomial, data=dat)
+
+lrtest(m,m_sugar)
+lrtest(m,m_fat)
+lrtest(m,m_sodium)
+lrtest(m_interactions,m) # shows no difference betweeen model with and without interactions
+```
+
+f) See output below for predicted probabilities for each shelf.
+```{r}
+size_g <- 28
+sugar_g <- 12
+fat_g <- .5
+sodium_mg <- 130
+df_new <- as.data.frame(cbind(size_g,sugar_g,fat_g,sodium_mg))
+# dividing each explanatory variable by serving size for consistency
+df_new$sugar_g <- df_new$sugar_g/df_new$size_g
+df_new$fat_g <- df_new$fat_g/df_new$size_g
+df_new$sodium_mg <- df_new$sodium_mg/df_new$size_g
+# re-scale each variable to be between 0 and 1 (normalize)
+df_new$sugar_g <- (df_new$sugar_g-min(dat$sugar_g))/(max(dat$sugar_g)-min(dat$sugar_g))
+df_new$fat_g <- (df_new$fat_g-min(dat$fat_g))/(max(dat$fat_g)-min(dat$fat_g))
+df_new$sodium_mg <- (df_new$sodium_mg-min(dat$sodium_mg))/(max(dat$sodium_mg)-min(dat$sodium_mg))
+predictvglm(m,df_new,type="response")
+```
+
+g) The sugar plot shows that holding the other predictors constant, an increase in sugar increases the probability of a cereal being on shelf 2 and generally shelf 1, while decreasing the probability of being on shelf 3 and 4. The fat plot shows that holding the other two predictors constant, an increas in fat increases the probability of a cereal being on shelf 2 and decreasing the probabilities for the other shelves. The sodium plot shows that holding the other two predictors constant, the probability of shelf 1 increases as sodium content increases, while the probability of shelf 2 and 3 clearly decrease.
+```{r}
+# sugar plot
+sugar_g <- seq(0,1,.005)
+fat_g <- rep(mean(dat$fat_g), 201)
+sodium_mg <- rep(mean(dat$sodium_mg), 201)
+sugar_df <- as.data.frame(cbind(sugar_g,fat_g,sodium_mg)) 
+sugar_preds <- predictvglm(m,sugar_df,type="response")
+plot(sugar_g,sugar_preds[,1],type="l",col="red",ylim=c(0,1),xlim=c(0,1),main="Sugar",
+     ylab="Probability",xlab="Sugar")
+lines(sugar_g,sugar_preds[,2],type="l",col="blue")
+lines(sugar_g,sugar_preds[,3],type="l",col="green")
+lines(sugar_g,sugar_preds[,4],type="l",col="purple")
+legend("topleft", c("Shelf 1", "Shelf 2", "Shelf 3", "Shelf 4"),
+       col=c("red", "blue", "green","purple"), lty=1, cex=0.8)
+# fat plot
+fat_g <- seq(0,1,.005)
+sugar_g <- rep(mean(dat$sugar_g), 201)
+sodium_mg <- rep(mean(dat$sodium_mg), 201)
+fat_df <- as.data.frame(cbind(sugar_g,fat_g,sodium_mg)) 
+fat_preds <- predictvglm(m,fat_df,type="response")
+plot(fat_g,fat_preds[,1],type="l",col="red",ylim=c(0,1),xlim=c(0,1),main="Fat",
+     ylab="Probability",xlab="Fat")
+lines(fat_g,fat_preds[,2],type="l",col="blue")
+lines(fat_g,fat_preds[,3],type="l",col="green")
+lines(fat_g,fat_preds[,4],type="l",col="purple")
+legend("topleft", c("Shelf 1", "Shelf 2", "Shelf 3", "Shelf 4"),
+       col=c("red", "blue", "green","purple"), lty=1, cex=0.8)
+# sodium plot
+sodium_mg <- seq(0,1,.005)
+sugar_g <- rep(mean(dat$sugar_g), 201)
+fat_g <- rep(mean(dat$fat_g), 201)
+sodium_df <- as.data.frame(cbind(sugar_g,fat_g,sodium_mg)) 
+sodium_preds <- predictvglm(m,sodium_df,type="response")
+plot(sodium_mg,sodium_preds[,1],type="l",col="red",ylim=c(0,1),xlim=c(0,1),main="Sodium",
+     ylab="Probability",xlab="Sodium")
+lines(sodium_mg,sodium_preds[,2],type="l",col="blue")
+lines(sodium_mg,sodium_preds[,3],type="l",col="green")
+lines(sodium_mg,sodium_preds[,4],type="l",col="purple")
+legend("topleft", c("Shelf 1", "Shelf 2", "Shelf 3", "Shelf 4"),
+       col=c("red", "blue", "green","purple"), lty=1, cex=0.8)
+```
+
+h) See output below for odds ratios and confidence intervals.
+```{r}
+#odds ratios
+log_odds_ratios <- predictvglm(m)
+odds_ratios <- as.data.frame(exp(log_odds_ratios))
+names(odds_ratios) <- c("(mu[,1]/mu[,4])", "log(mu[,2]/mu[,4])", "log(mu[,3]/mu[,4])")
+odds_ratios
+#confidence intervals of coefficient estimates
+confintvglm(m)
+```

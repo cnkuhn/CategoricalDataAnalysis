@@ -1,0 +1,266 @@
+---
+title: "Project 3"
+author: "Corey Kuhn"
+date: "March 18, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+A logistic regression model predicting the winner of each tournament game based on seed differential alone can be written as 
+
+\begin{equation}
+logit[\pi(x)] = 0.052237 + 0.171614x
+\end{equation}
+
+or equivalently as
+
+\begin{equation}
+\frac{\pi(x)}{1-\pi(x)} = e^{0.052237 + 0.171614x}
+\end{equation}
+
+where $\pi(x)$ is the probability that Team 1 wins for each tournament and $x$ is the difference in seeds between the two teams, where the seed difference $x$ is determined by subtracting the seed of Team 1 from the seed of Team 2. For interpretation, we will refer to logistic regression models in the form of the second equation, rather than the first. In the second equation, the intercept term shows that for each tournament, Team 1 has an estimated odds of beating Team 2 of $e^{0.052237}$, or 1.0536. It also shows that for each additional unit difference in seed, the estimated odds of Team 1 beating Team 2 increases by a multiplicative factor of $e^{0.171614}$, or 1.1872. The median affective value in this case is -0.3043838, which is the value of the difference in seeds between the two teams at which the predicted probability of Team 1 beating Team 2 equals 0.5 (that is, that the the probability of Team 1 winning is equal to the probability of Team 2 winning).
+
+We begin model diagnostics by comparing the model to the null model, or the intercept-only model. The intercept-only model has a deviance of 2469.3 while the seed difference model as a deviance of 1950.8. To determine if we need seed difference in the model, we compare the difference of these diaviance by caluculating a likelihood-ratio statistic of 518.52 and a corresponding p-value of approximately 0. Therefore, we conclude that there is strong evidence that there is an effect of seed difference on the odds of Team 1 beating Team 2, and we favor the seed difference model over the intercept-only model. We can also compare the performance of the two models by looking at the logloss and the area under the ROC curve for each. Using the logloss equation on Kaggle, the logloss for the null model is 0.694005, and the logloss for the seed difference model is 0.5929039. This means that the seed difference model is more accurate in predicting the winning or losing status of each game in the test dataset, since the logloss of the model, a way to measure the difference between actual and predicted values, is less than the logloss of the the null model. Lastly, we plot the ROC function for each model and compare the area under each curve. We can tell by looking at each curve below that the seed difference model will have a greater area under the curve than the null model, which means the seed difference model correctly predicts whether or not Team 1 will beat Team 2, using a cutoff of 0.5, for a greater proportion of games than the null model. Caluculating the areas, we get 0.5 for the null model and 0.6829 for the seed difference model, which confirms our analysis of the ROC curves. All things considered, we prefer the seed difference model over the null model.
+
+```{r include=FALSE, echo=FALSE, results="hide"}
+library(dplyr)
+library(stringr)
+setwd("~/Desktop/LUC Senior/Semester 2/Catergorical Data Analysis/Project 3/Data")
+tourney_seeds <- read.csv("TourneySeeds.csv")
+tourney_compact_results <- read.csv("TourneyCompactResults.csv")
+dat <- tourney_compact_results[,c(1,3,5)]
+dat$Team1 <- pmin(dat$Wteam, dat$Lteam)
+dat$Team2 <- pmax(dat$Wteam, dat$Lteam)
+dat$Team1Win <- ifelse(dat$Wteam==dat$Team1, 1, 0)
+dat <- dat %>% 
+  left_join(tourney_seeds, by=c("Season", "Team1" = "Team")) %>%
+  left_join(tourney_seeds, by=c("Season", "Team2" = "Team"),
+            suffix=c(".Team1", ".Team2"))
+dat$Seed.Team1 <- as.numeric(str_extract(dat$Seed.Team1, "[:digit:]+"))
+dat$Seed.Team2 <- as.numeric(str_extract(dat$Seed.Team2, "[:digit:]+"))
+dat$Seed.Difference <- dat$Seed.Team2 - dat$Seed.Team1
+train <- dat[dat$Season < 2013,]
+test <- dat[dat$Season >= 2013,]
+
+# Model based on seed differential alone
+m1 <- glm(Team1Win ~ Seed.Difference, family=binomial, data = train)
+
+# Median effective value
+
+mev <- -m1$coefficients[1]/m1$coefficients[2]
+ 
+# Model checking and comparison
+
+# LRT
+
+m0 <- glm(Team1Win ~ 1, family=binomial, data = train)
+
+
+# Predictions
+predictions_m0 <- predict(m0, test, type = "response")
+predictions_m1 <- predict(m1, test, type = "response")
+
+# ROC curve for the test dataset
+
+library(pROC)
+test$pred_m0 <- predictions_m0
+test$pred_m0 <- ifelse(test$pred_m0>=.5, 1, 0)
+roc_m0 <- roc(test$Team1Win, test$pred_m0) # 0.5
+
+test$pred_m1 <- predictions_m1
+test$pred_m1 <- ifelse(test$pred_m1>=.5, 1, 0)
+roc_m1 <- roc(test$Team1Win, test$pred_m1) # 0.6829
+```
+
+```{r, echo=FALSE}
+invisible(plot(roc_m0, main="ROC: Team1Win ~ 1"))
+invisible(plot(roc_m1, main="ROC: Team1Win ~ Seed.Difference"))
+```
+
+
+
+We now explore the possibility of adding other predictor variables to the seed difference logistic regression model. To do so, we start off by calcualting season averages for a handful of measurements for each team. This way, we can use a team's seasonal averages to predict whether they will win or lose a game against other teams in March Madness. After calculating the averages, the difference is calculated between the averages of two particular teams in a game. Using these differences, we can predict the probability that Team 1 will beat Team 2, as we did with the difference in seed. The first model we fit to the train dataset includes the seed difference and the difference in averages in the variables included in the Regular Season Detailed Results file. After performing backward elimination, the only two variables left as significant are the difference in seed and the difference in average number of overtime periods in a game. The model can be written as
+
+\begin{equation}
+\frac{\pi(x)}{1-\pi(x)} = e^{-0.02501 + 0.17763x_1 + 3.67245x_2}
+\end{equation}
+
+where $\pi(x)$ is still the probability that Team 1 beats Team 2, $x_1$ is the difference in seeds, and $x_2$ is the difference in average number of overtime periods in a game (where Team 1 is subtracted from Team 2). The intercept term tells us that for each tournament, Team 1 has an estimated odds of beating Team 2 of $e^{-0.02501}$, or 0.9753. This equation also shows that for each additional unit increase in difference of seed, with the difference in average number of overtime periods held constant, the estimated odds of Team 1 beating Team 2 increases by a multiplicative factor of $e^{0.17763}$, or 1.1944. The third term means that with the difference in seed held constant, the estimated odds of Team 1 beating Team 2 increases by a multiplicative factor of $e^{3.67245}$, or 39.3482, for each additional unit difference in average number of overtime periods. The median affective values in this case would be the value of the difference in seeds between the two teams and the value of the difference in average number of overtime periods for which the predicted probability of Team 1 beating Team 2 equals 0.5 (that is, that the the probability of Team 1 winning is equal to the probability of Team 2 winning). If the difference in average number of overtime periods is 0, the median effective value of the difference in seeds would be 0.1408024, meaning the predicted probability of Team 1 winning is equal to the probability of Team 2 winning when the difference in seeds is 0.1408024. If the difference in seeds is 0, the median effective value of the difference in average number of overtime periods would be 0.006810473, meaning the predicted probability of Team 1 winning is equal to the probability of Team 2 winning when the difference in average number of overtime periods is 0.006810473.
+
+Exploring model diagnostics, we compare this model to the model with just seed difference. The seed difference model has a deviance of 700.59 while this model has a deviance of 675.13. To determine if we need seed difference in the model, we compare the difference of these diaviance by caluculating a likelihood-ratio statistic of 7.985 and a corresponding p-value of 0.004716. Therefore, we conclude that there is strong evidence that the difference in average number of overtime periods has an effect on the odds of Team 1 beating Team 2, and we favor the more complex model over the seed difference only model. Testing for interaction between the two predictor variables, we conclude that the interaction term is insignificant and we retain the model without interaction. Considering the logloss of the model with seed difference as the only predictor and the logloss of the model with seed difference (logloss=0.5954186) and difference in average number of overtime periods as the predictors (logloss=0.5979111), we do not see a great difference in the two models between the predicted and the actual values, but the logloss suggests that the model using just seed difference predicts values slightly better than the model with two parameters. The ROC curves for both models also look very similar (see plots below), suggesting that the two models accurately predict the outcome for a similar proportion of games. The calculated area under the curve for the model with two predictors, however, is greater than the area under the curve for the model with seed difference as the only predictor (0.704 compared to 0.6887). Thus, we stick with the model with two predictors because it has a greater probability of correct classification.
+
+```{r include=FALSE, echo=FALSE, results="hide"}
+library(dplyr)
+library(stringr)
+setwd("~/Desktop/LUC Senior/Semester 2/Catergorical Data Analysis/Project 3/Data")
+
+seasons <- read.csv("Seasons.csv")
+fullSeasonData <- read.csv("RegularSeasonDetailedResults.csv")
+compactSeasonData <- read.csv("RegularSeasonCompactResults.csv")
+teams <- read.csv("Teams.csv")
+tourneyData <- read.csv("TourneyDetailedResults.csv")
+compactTourneyData <- read.csv("TourneyCompactResults.csv")
+seeds <- read.csv("TourneySeeds.csv")
+submission <- read.csv("SampleSubmission.csv")
+
+seeds$pureSeed <- as.numeric(substr(seeds$Seed, 2,3))  # Extract the substring from the 'seed' value starting with the second character and going to the third character, then convert to a numeric and store as new variable 'pureSeed'
+seeds$region <- as.character(substr(seeds$Seed,1,1)) #Extract the region as well, which we'll need for calculating dates of games later
+
+compactTourneyData$team1 <- ifelse(compactTourneyData$Wteam > compactTourneyData$Lteam, compactTourneyData$Lteam, compactTourneyData$Wteam) #If the ID of the winning team is higher than the ID of the losing team, team1 is the losing team, else its the winning team
+compactTourneyData$team2 <- ifelse(compactTourneyData$Wteam > compactTourneyData$Lteam, compactTourneyData$Wteam, compactTourneyData$Lteam) #Vice versa to find team2
+compactTourneyData$team1Victory <- ifelse(compactTourneyData$Wteam == compactTourneyData$team1, 1, 0) #Create a "Team1 Victory" binary variable
+
+# The first step is parsing the detailed regular season results into team stats per game
+winnerHistory <- fullSeasonData[,c("Season","Wteam","Daynum","Wscore","Numot","Wfgm","Wfga","Wfgm3","Wfga3","Wftm","Wfta","Wor","Wdr","Wast","Wto","Wstl","Wblk","Wpf")]
+winnerHistory$Victory <- 1
+loserHistory <- fullSeasonData[,c("Season","Lteam","Daynum","Lscore","Numot","Lfgm","Lfga","Lfgm3","Lfga3","Lftm","Lfta","Lor","Ldr","Last","Lto","Lstl","Lblk","Lpf")]
+loserHistory$Victory <- 0
+
+# Now we normalize the column names before combining the two dataframes
+names(winnerHistory) <- c("season","team","daynum","score","numot","fgmade","fgattempt","fgm3","fga3","ftmade","ftattempt","offreb","defreb","ast","turnover","steal","block","pfoul","victory")
+names(loserHistory) <- c("season","team","daynum","score","numot","fgmade","fgattempt","fgm3","fga3","ftmade","ftattempt","offreb","defreb","ast","turnover","steal","block","pfoul","victory")
+teamHistory <- rbind(winnerHistory, loserHistory)
+
+# We'll likely use this teamHistory archive for several different things, but for now we'll pull out season long averages for each stat for each team
+teamAverages <- aggregate(teamHistory, by=list(teamHistory$season,teamHistory$team), FUN=mean, na.rm=TRUE)
+# Average of each season for each team --> use season average to predict each game in that season
+
+
+#We'll start by adding both teams' season average stats to each tourney match
+train1 <- merge(compactTourneyData[,c("Season","Daynum","team1","team2","team1Victory")],teamAverages[,c("season","team","score","numot","fgmade","fgattempt","fgm3","fga3","ftmade","ftattempt","offreb","defreb","ast","turnover","steal","block","pfoul","victory")], by.x = c("Season","team1"), by.y = c("season","team"))
+names(train1)[6:21] <- paste("team1avg",names(train1)[6:21],sep = "")
+train1 <- merge(train1,teamAverages[,c("season","team","score","numot","fgmade","fgattempt","fgm3","fga3","ftmade","ftattempt","offreb","defreb","ast","turnover","steal","block","pfoul","victory")], by.x = c("Season","team2"), by.y = c("season","team"))
+names(train1)[22:37] <- paste("team2avg",names(train1)[22:37],sep = "")
+
+# Lets also pull in their respective seeds, as I suspect the most important independent variable will involve seeds
+train1 <- merge(train1, seeds[,c("Season","Team","pureSeed","region")], by.x = c("Season","team1"), by.y = c("Season","Team"))
+colnames(train1)[colnames(train1)=="pureSeed"] <- "seed1"
+colnames(train1)[colnames(train1)=="region"] <- "region1"
+train1 <- merge(train1, seeds[,c("Season","Team","pureSeed", "region")], by.x = c("Season","team2"), by.y = c("Season","Team"))
+colnames(train1)[colnames(train1)=="region"] <- "region2"
+
+# Now comes my primary focus: the difference between both teams' seed values, which should have a powerful predictive effect
+# pureSeed is Team 2
+train1$seedDelta <- train1$pureSeed - train1$seed1
+
+# While we're at it, it might not hurt to calculate deltas for all of the stats
+# make sure to subtract team 1 from team 2 as we did in the very first model for seed difference
+train1$scoreDiff <- train1$team2avgscore - train1$team1avgscore
+train1$numotDiff <- train1$team2avgnumot - train1$team1avgnumot
+train1$fgmadeDiff <- train1$team2avgfgmade - train1$team1avgfgmade
+train1$fgattemptDiff <- train1$team2avgfgattempt - train1$team1avgfgattempt
+train1$fgm3Diff <- train1$team2avgfgm3 - train1$team1avgfgm3
+train1$fga3Diff <- train1$team2avgfga3 - train1$team1avgfga3
+train1$ftmadeDiff <- train1$team2avgftmade - train1$team1avgftmade
+train1$ftattemptDiff <- train1$team2avgftattempt - train1$team1avgftattempt
+train1$offrebDiff <- train1$team2avgoffreb - train1$team1avgoffreb
+train1$defrebDiff <- train1$team2avgdefreb - train1$team1avgdefreb
+train1$astDiff <- train1$team2avgast - train1$team1avgast
+train1$turnoverDiff <- train1$team2avgturnover - train1$team1avgturnover
+train1$stealDiff <- train1$team2avgsteal - train1$team1avgsteal
+train1$blockDiff <- train1$team2avgblock - train1$team1avgblock
+train1$pfoulDiff <- train1$team2avgpfoul - train1$team1avgpfoul
+train1$victoryDiff <- train1$team2avgvictory - train1$team1avgvictory
+
+# One last bit of data housekeeping: We need to convert Daynum into a broader measure of the tournament round, since we can't forecast which specific day any two teams will play during rounds 1-4
+roundConverter <- function(x){return(switch(as.character(x),'134'=0,'135'=0,'136'=1,'137'=1,'138'=2,'139'=2,'143'=3,'144'=3, '145'=4,'146'=4,'152'=5,'154'=6))}
+train1$round <- sapply(train1$Daynum, roundConverter)
+
+train <- train1[which(train1$Season <= 2012),]
+test <- train1[which(train1$Season >= 2013),]
+
+
+
+## Now, find my model after using code from online to find averages of stats
+
+m2 <- glm(team1Victory ~ seedDelta + scoreDiff + numotDiff + fgmadeDiff + fgattemptDiff +
+            fgm3Diff + fga3Diff + ftmadeDiff + ftattemptDiff + offrebDiff + defrebDiff +
+            astDiff + turnoverDiff + stealDiff + blockDiff + pfoulDiff + victoryDiff
+          , family=binomial(link = 'logit'), data = train)
+summary(m2)
+
+# Only keep the vars significant at the .05 level
+# seedDelta, numotDiff, ftattemptDiff, turnoverDiff
+m3 <- glm(team1Victory ~ seedDelta + numotDiff + ftattemptDiff + turnoverDiff
+          , family=binomial(link = 'logit'), data = train)
+summary(m3)
+# Now, only seedDelta and numotDiff are significant
+
+drop1(m3,test="Chisq")
+# drop ftattemptDiff
+
+m33 <- glm(team1Victory ~ seedDelta + numotDiff + turnoverDiff
+           , family=binomial(link = 'logit'), data = train)
+summary(m33)
+#drop turnoverDiff
+
+m4 <- glm(team1Victory ~ seedDelta + numotDiff
+          , family=binomial(link = 'logit'), data = train)
+summary(m4)
+
+# Median effective value
+
+mev1 <- -m4$coefficients[1]/m4$coefficients[2] # 0.1408024
+mev2 <- -m4$coefficients[1]/m4$coefficients[3] # 0.006810473
+
+
+# Is m4 significantly different from m1 (model with numotDiff and seedDelta vs just seedDelta)
+# Is m4 significantly different from ,2 (saturated model with ALL variables)
+
+m1 <- glm(team1Victory ~ seedDelta
+          , family=binomial(link = 'logit'), data = train)
+summary(m1)
+
+anova(m1,m2,test="Chisq")
+drop1(m4,test="Chisq")
+# test shows that the two models are significantly different, so cannot use simpler model
+# we settle on m4
+
+#Test it on the test dataset
+test_prediction_m4 <- predict(m4, test, type = 'response')
+test_prediction_m1 <- predict(m1, test, type = 'response')
+
+
+# test interaction term significance
+m5 <- glm(team1Victory ~ seedDelta*numotDiff
+          , family=binomial(link = 'logit'), data = train)
+summary(m5)
+# interaction term not significant
+
+
+# Look at logloss using m4
+# log loss function (used by Kaggle)
+MultiLogLoss <- function(actual, predicted){
+  epsilon <- 1e-15 # What is this doing/why/where did it come from??
+  predicted <- pmin(pmax(predicted, epsilon), 1 - epsilon)
+  (-1/NROW(actual))*sum(actual*log(predicted) + (1 - actual)*log(1 - predicted))
+}
+
+logloss_m1 <- MultiLogLoss(test$team1Victory, test_prediction_m1) # 0.5954186
+logloss_m4 <- MultiLogLoss(test$team1Victory, test_prediction_m4) # 0.5979111
+
+
+library(pROC)
+test$pred_m1 <- test_prediction_m1
+test$pred_m1 <- ifelse(test$pred_m1>=.5, 1, 0)
+roc_m1 <- roc(test$team1Victory, test$pred_m1) # 
+
+test$pred_m4 <- test_prediction_m4
+test$pred_m4 <- ifelse(test$pred_m4>=.5, 1, 0)
+roc_m4 <- roc(test$team1Victory, test$pred_m4) # 
+# auc closest to 1 is most desireable --> probability of correct classification
+
+```
+
+```{r, echo=FALSE}
+invisible(plot(roc_m1, main="ROC: Team1Win ~ seedDelta"))
+invisible(plot(roc_m4, main="ROC: Team1Win ~ seedDelta + numotDiff"))
+```
+
+
+
+
+
